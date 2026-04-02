@@ -20,7 +20,7 @@ Build a unified email engine for AI agents in 5 phases: start with project scaff
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Project scaffolding + config system (pyproject.toml, pydantic config models, config loader with password_cmd support)
+- [x] 01-01: Project scaffolding + config system (pyproject.toml, pydantic config models, config loader with password_cmd support)
 - [ ] 01-02: Data models + database (pydantic models for all entities, SQLite schema with migrations, mp_id generation)
 - [ ] 01-03: IMAP client + email parser (async IMAP wrapper with connection pool, provider quirks, RFC822 parser with MIME decoding)
 
@@ -66,7 +66,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/3 | Not started | - |
+| 1. Foundation | 1/3 | In progress | - |
 | 2. Sync + IDLE | 0/3 | Not started | - |
 | 3. Search + Tags | 0/3 | Not started | - |
 | 4. Send + CRUD | 0/2 | Not started | - |

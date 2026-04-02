@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mailpilot"
+version = "0.1.0"
+description = "Real-time email engine for AI agents — one tool to replace mbsync + notmuch + himalaya"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [{ name = "ae" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+    "Topic :: Communications :: Email :: Email Clients (MUA)",
+    "Typing :: Typed",
+]
+dependencies = [
+    "aioimaplib",
+    "aiosmtplib",
+    "aiosqlite",
+    "pydantic>=2.0",
+    "click>=8.0",
+    "pyyaml",
+    "python-dateutil",
+    "mail-parser",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "pre-commit",
+]
+
+[project.scripts]
+mailpilot = "mailpilot.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/ae/mail-pilot"
+Repository = "https://github.com/ae/mail-pilot"
+Issues = "https://github.com/ae/mail-pilot/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mailpilot"]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "A", "SIM", "TCH"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

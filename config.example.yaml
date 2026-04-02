@@ -1,0 +1,105 @@
+# MailPilot Configuration
+# Copy to ~/.mailpilot/config.yaml and edit for your setup.
+
+mailpilot:
+  data_dir: "~/.mailpilot"
+  log_level: "INFO"
+  log_format: "json"
+  # log_file: "~/.mailpilot/mailpilot.log"
+
+accounts:
+  - name: "personal"
+    email: "you@gmail.com"
+    display_name: "Your Name"
+    provider: "gmail"
+
+    imap:
+      host: "imap.gmail.com"
+      port: 993
+      encryption: "tls"
+      auth:
+        method: "password"
+        password_cmd: "security find-generic-password -s mailpilot-personal -w"
+
+    smtp:
+      host: "smtp.gmail.com"
+      port: 587
+      encryption: "starttls"
+      auth:
+        method: "password"
+        password_cmd: "security find-generic-password -s mailpilot-personal -w"
+
+    folders:
+      watch:
+        - "INBOX"
+      sync:
+        - "INBOX"
+        - "[Gmail]/Sent Mail"
+        - "[Gmail]/Drafts"
+      aliases:
+        sent: "[Gmail]/Sent Mail"
+        drafts: "[Gmail]/Drafts"
+        trash: "[Gmail]/Trash"
+        spam: "[Gmail]/Spam"
+
+    # webhook_url: "http://localhost:8080/webhook/email"
+
+  - name: "work"
+    email: "you@company.com"
+    provider: "outlook"
+
+    imap:
+      host: "outlook.office365.com"
+      port: 993
+      encryption: "tls"
+      auth:
+        method: "oauth2"
+        client_id: "your-client-id"
+        client_secret: "your-client-secret"
+
+    smtp:
+      host: "smtp.office365.com"
+      port: 587
+      encryption: "starttls"
+      auth:
+        method: "oauth2"
+        client_id: "your-client-id"
+        client_secret: "your-client-secret"
+
+    folders:
+      watch:
+        - "INBOX"
+      sync:
+        - "INBOX"
+        - "Sent Items"
+        - "Drafts"
+      aliases:
+        sent: "Sent Items"
+        drafts: "Drafts"
+        trash: "Deleted Items"
+        spam: "Junk Email"
+
+search:
+  stemming: "english"
+  spelling: true
+  snippet_length: 200
+  default_limit: 20
+
+sync:
+  idle_timeout: 1680
+  reconnect_base_delay: 5
+  reconnect_max_delay: 300
+  full_sync_interval: 3600
+  max_message_size: 52428800  # 50 MB
+
+rules:
+  - name: "tag-github"
+    match: "from:notifications@github.com"
+    actions:
+      - tag: "+github"
+
+  - name: "tag-receipts"
+    match: "subject:receipt OR subject:invoice"
+    actions:
+      - tag: "+receipt"
+      - tag: "+finance"
