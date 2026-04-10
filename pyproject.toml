@@ -30,6 +30,7 @@ dependencies = [
     "pyyaml",
     "python-dateutil",
     "mail-parser",
+    "msal",
 ]
 
 [project.optional-dependencies]

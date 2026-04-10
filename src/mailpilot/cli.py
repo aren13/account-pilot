@@ -753,6 +753,55 @@ def account_list(ctx: click.Context) -> None:
         _error_json(str(exc))
 
 
+@account_group.command("auth")
+@click.argument("account_name")
+@click.pass_context
+def account_auth(
+    ctx: click.Context, account_name: str
+) -> None:
+    """Authorize an OAuth2 account via device code flow."""
+    from mailpilot.config import load_config
+    from mailpilot.oauth import acquire_token_interactive
+
+    raw = ctx.obj.get("config")
+    config_path = Path(raw) if raw else None
+    config = load_config(config_path)
+
+    acct = None
+    for a in config.accounts:
+        if a.name == account_name:
+            acct = a
+            break
+
+    if acct is None:
+        _error_json(f"Account '{account_name}' not found in config")
+        return
+
+    if acct.imap.auth.method != "oauth2":
+        _error_json(
+            f"Account '{account_name}' is not configured for OAuth2"
+        )
+        return
+
+    try:
+        token = acquire_token_interactive(
+            auth=acct.imap.auth,
+            data_dir=config.mailpilot.data_dir,
+            account_name=acct.name,
+            email=acct.email,
+        )
+        output_result(
+            {
+                "account": account_name,
+                "status": "authorized",
+                "token_preview": token[:20] + "...",
+            },
+            ctx.obj["output"],
+        )
+    except Exception as exc:
+        _error_json(str(exc))
+
+
 @account_group.command("test")
 @click.argument("account_name")
 @click.pass_context
