@@ -15,6 +15,9 @@ if TYPE_CHECKING:
 
     from mailpilot.config import AccountConfig
 
+# Data dir is needed for OAuth token cache; set by MailPilot on init.
+_data_dir: str = ""
+
 logger = logging.getLogger(__name__)
 
 # SMTP reply codes considered transient (worth retrying).
@@ -46,13 +49,6 @@ class SmtpClient:
             SmtpError: If the connection cannot be established.
         """
         cfg = self._account.smtp
-        try:
-            password = resolve_password(cfg.auth)
-        except Exception as exc:
-            raise SmtpAuthError(
-                f"Failed to resolve password: {exc}"
-            ) from exc
-
         use_tls = cfg.encryption == "tls"
 
         try:
@@ -72,7 +68,23 @@ class SmtpClient:
             ) from exc
 
         try:
-            await self._smtp.login(self._account.email, password)
+            if cfg.auth.method == "oauth2":
+                from mailpilot.oauth import get_access_token
+
+                token = get_access_token(
+                    cfg.auth,
+                    _data_dir,
+                    self._account.name,
+                    self._account.email,
+                )
+                await self._smtp.auth_xoauth2(
+                    self._account.email, token
+                )
+            else:
+                password = resolve_password(cfg.auth)
+                await self._smtp.login(
+                    self._account.email, password
+                )
         except aiosmtplib.SMTPAuthenticationError as exc:
             raise SmtpAuthError(
                 f"Login failed for {self._account.email}: {exc}"

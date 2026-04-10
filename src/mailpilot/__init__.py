@@ -62,6 +62,13 @@ class MailPilot:
         data_dir = Path(self._config.mailpilot.data_dir)
         data_dir.mkdir(parents=True, exist_ok=True)
 
+        # Set data_dir for OAuth token cache in IMAP/SMTP clients.
+        import mailpilot.imap.client as _imap_mod
+        import mailpilot.smtp.client as _smtp_mod
+
+        _imap_mod._data_dir = str(data_dir)
+        _smtp_mod._data_dir = str(data_dir)
+
         # Database
         self._db = Database(data_dir / "mailpilot.db")
         await self._db.initialize()

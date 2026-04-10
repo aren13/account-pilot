@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from mailpilot.config import AccountConfig, SyncConfig
     from mailpilot.providers import Provider
 
+# Data dir is needed for OAuth token cache; set by MailPilot on init.
+_data_dir: str = ""
+
 logger = logging.getLogger(__name__)
 
 # Regex to extract folder name from LIST response line.
@@ -67,12 +70,6 @@ class ImapClient:
             ConnectionError: If the TCP/TLS connection fails.
         """
         imap_cfg = self._account.imap
-        try:
-            password = resolve_password(imap_cfg.auth)
-        except Exception as exc:
-            raise AuthenticationError(
-                f"Failed to resolve password: {exc}"
-            ) from exc
 
         try:
             if imap_cfg.encryption == "tls":
@@ -97,7 +94,24 @@ class ImapClient:
             ) from exc
 
         try:
-            response = await conn.login(self._account.email, password)
+            if imap_cfg.auth.method == "oauth2":
+                from mailpilot.oauth import get_access_token
+
+                token = get_access_token(
+                    imap_cfg.auth,
+                    _data_dir,
+                    self._account.name,
+                    self._account.email,
+                )
+                response = await conn.xoauth2(
+                    self._account.email, token
+                )
+            else:
+                password = resolve_password(imap_cfg.auth)
+                response = await conn.login(
+                    self._account.email, password
+                )
+
             if response.result != "OK":
                 raise AuthenticationError(
                     f"Login failed for {self._account.email}: "

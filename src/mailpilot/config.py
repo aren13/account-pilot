@@ -23,6 +23,7 @@ class AuthConfig(BaseModel):
     password_cmd: str | None = None
     client_id: str | None = None
     client_secret: str | None = None
+    tenant_id: str | None = None
 
 
 class ImapConfig(BaseModel):
