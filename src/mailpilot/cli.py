@@ -245,17 +245,29 @@ def sync(ctx: click.Context, account: str | None) -> None:
     """Sync messages from IMAP (optionally for one account)."""
 
     async def _run() -> dict:
+        from mailpilot.imap.sync import MaildirManager, SyncEngine
+
         mp = get_mailpilot(ctx)
         async with mp:
             acct = account or ctx.obj.get("account")
-            # Trigger a full sync via the daemon's sync engine
+            data_dir = Path(mp.config.mailpilot.data_dir)
+            maildir = MaildirManager(data_dir / "maildir")
             synced = []
             for acct_cfg in mp.config.accounts:
                 if acct and acct_cfg.name != acct:
                     continue
                 imap = mp._imap_clients.get(acct_cfg.name)
-                if imap:
-                    synced.append(acct_cfg.name)
+                if imap is None:
+                    continue
+                engine = SyncEngine(
+                    imap_client=imap,
+                    db=mp.db,
+                    maildir=maildir,
+                    parser=mp._parser,
+                    account=acct_cfg,
+                )
+                await engine.sync_account()
+                synced.append(acct_cfg.name)
             return {
                 "synced_accounts": synced,
                 "status": "ok",
