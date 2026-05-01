@@ -7,7 +7,12 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
-from accountpilot.core.identity import find_or_create_person
+from accountpilot.core.identity import (
+    find_or_create_person,
+    normalize_email,
+    normalize_handle,
+    normalize_phone,
+)
 from accountpilot.core.models import (
     AttachmentBlob,
     EmailMessage,
@@ -275,11 +280,18 @@ class Storage:
                     "WHERE id=?",
                     (name, surname, datetime.now(UTC).isoformat(), pid),
                 )
-                # Add any new identifiers.
-                for missing in identifiers:
-                    await find_or_create_person(
-                        self.db, kind=missing.kind, value=missing.value,
-                        default_name=f"{name} {surname or ''}".strip(),
+                # Attach any not-yet-present identifiers to the matched person.
+                # INSERT OR IGNORE silently skips identifiers that already exist
+                # (UNIQUE on kind, value); for cross-person collisions the
+                # caller is expected to run merge_people separately.
+                for ident in identifiers:
+                    await self.db.execute(
+                        "INSERT OR IGNORE INTO identifiers "
+                        "(person_id, kind, value, is_primary, created_at) "
+                        "VALUES (?, ?, ?, 0, ?)",
+                        (pid, ident.kind,
+                         _normalize_for_kind(ident.kind, ident.value),
+                         datetime.now(UTC).isoformat()),
                     )
                 await self.db.commit()
                 return pid
@@ -366,11 +378,6 @@ class Storage:
 
 
 def _normalize_for_kind(kind: str, value: str) -> str:
-    from accountpilot.core.identity import (
-        normalize_email,
-        normalize_handle,
-        normalize_phone,
-    )
     if kind == "email":
         return normalize_email(value)
     if kind == "phone":
