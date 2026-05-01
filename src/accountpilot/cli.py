@@ -3,6 +3,7 @@
 import click
 
 from accountpilot.core.cli.db_cmds import db_group
+from accountpilot.core.cli.search_cmd import search_cmd
 
 
 @click.group()
@@ -12,3 +13,4 @@ def cli() -> None:
 
 
 cli.add_command(db_group)
+cli.add_command(search_cmd)
