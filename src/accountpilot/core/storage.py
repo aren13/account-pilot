@@ -72,15 +72,27 @@ class Storage:
                 await self.db.execute("ROLLBACK")
                 return SaveResult(action="skipped", message_id=int(existing["id"]))
 
+            # Look up the account's source so messages.source stays in sync with
+            # accounts.source.
+            async with self.db.execute(
+                "SELECT source FROM accounts WHERE id=?", (msg.account_id,)
+            ) as cur:
+                row = await cur.fetchone()
+            if row is None:
+                await self.db.execute("ROLLBACK")
+                raise ValueError(f"unknown account_id: {msg.account_id}")
+            source = str(row["source"])
+
             # Insert message + email_details + message_people + attachments (no
             # nested commits — find_or_create_person calls already done).
             now = datetime.now(UTC).isoformat()
             cur2 = await self.db.execute(
                 "INSERT INTO messages (account_id, source, external_id, thread_id, "
                 "sent_at, received_at, body_text, body_html, direction, created_at) "
-                "VALUES (?, 'gmail', ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     msg.account_id,
+                    source,
                     msg.external_id,
                     msg.gmail_thread_id,
                     msg.sent_at.isoformat(),

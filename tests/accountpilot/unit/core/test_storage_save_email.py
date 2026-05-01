@@ -160,3 +160,33 @@ async def test_save_email_fts_row_searchable(
         "SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'lorem'"
     ) as cur:
         assert (await cur.fetchone()) is not None
+
+
+async def test_save_email_uses_account_source_not_hardcoded(
+    tmp_db: aiosqlite.Connection, tmp_runtime: Path
+) -> None:
+    """messages.source must mirror accounts.source, not be hardcoded to 'gmail'."""
+    # Seed an owner + an Outlook account (not Gmail).
+    now = datetime.now(UTC).isoformat()
+    cur = await tmp_db.execute(
+        "INSERT INTO people (name, surname, is_owner, created_at, updated_at) "
+        "VALUES ('Aren', 'E', 1, ?, ?)",
+        (now, now),
+    )
+    owner_id = cur.lastrowid
+    cur = await tmp_db.execute(
+        "INSERT INTO accounts (owner_id, source, account_identifier, enabled, "
+        "created_at, updated_at) VALUES (?, 'outlook', 'a@b.com', 1, ?, ?)",
+        (owner_id, now, now),
+    )
+    account_id = cur.lastrowid
+    await tmp_db.commit()
+
+    storage = Storage(tmp_db, CASStore(tmp_runtime / "attachments"))
+    result = await storage.save_email(_make_email(account_id))
+
+    async with tmp_db.execute(
+        "SELECT source FROM messages WHERE id=?", (result.message_id,)
+    ) as cur:
+        row = await cur.fetchone()
+    assert row["source"] == "outlook"
