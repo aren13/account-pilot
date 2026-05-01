@@ -31,6 +31,7 @@ dependencies = [
     "python-dateutil",
     "mail-parser",
     "msal",
+    "phonenumbers>=8.13",     # E.164 normalization for identity
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,11 @@ dev = [
 
 [project.scripts]
 mailpilot = "mailpilot.cli:cli"
+accountpilot = "accountpilot.cli:cli"  # NEW
+
+[project.entry-points."accountpilot.plugins"]
+# Plugins register here. SP0 ships none. The synthetic test plugin registers
+# itself programmatically in tests, not via entry points.
 
 [project.urls]
 Homepage = "https://github.com/ae/mail-pilot"
@@ -52,7 +58,7 @@ Repository = "https://github.com/ae/mail-pilot"
 Issues = "https://github.com/ae/mail-pilot/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mailpilot"]
+packages = ["src/mailpilot", "src/accountpilot"]   # MODIFIED
 
 [tool.ruff]
 target-version = "py311"
@@ -63,6 +69,8 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "A", "SIM", "TCH"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"          # NEW: pytest-asyncio runs all async tests automatically
+pythonpath = [".", "src"]      # NEW: lets integration tests import tests.accountpilot.fixtures.*
 
 [tool.mypy]
 python_version = "3.11"
