@@ -124,11 +124,11 @@ def get_access_token(
 
     Tries the MSAL token cache first (silent acquisition with refresh
     token). If no cached token is available, raises RuntimeError
-    instructing the user to run ``mailpilot account auth``.
+    instructing the user to re-authorize the account.
 
     Args:
         auth: AuthConfig with client_id and tenant_id.
-        data_dir: MailPilot data directory.
+        data_dir: AccountPilot data directory.
         account_name: Account name for cache file.
         email: User email address.
 
@@ -147,7 +147,8 @@ def get_access_token(
     if not accounts:
         raise RuntimeError(
             f"No cached OAuth2 token for {email}. "
-            f"Run: mailpilot account auth {account_name}"
+            f"Re-authorize {account_name} via the OAuth flow "
+            f"(accountpilot's interactive auth command lands in AP-SP3)."
         )
 
     result = app.acquire_token_silent(scopes, account=accounts[0])
@@ -159,5 +160,6 @@ def get_access_token(
 
     raise RuntimeError(
         f"OAuth2 token refresh failed for {email}. "
-        f"Run: mailpilot account auth {account_name}"
+        f"Re-authorize {account_name} via the OAuth flow "
+        f"(accountpilot's interactive auth command lands in AP-SP3)."
     )
