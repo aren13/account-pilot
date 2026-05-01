@@ -1,3 +1,20 @@
+# AccountPilot
+
+A unified per-machine account sync framework. Pulls email, calendar,
+iMessage, Telegram, and WhatsApp data into a local SQLite database
+through a plugin architecture.
+
+> **Status:** AP-SP0 complete. The design supersedes the file+sidecar
+> + outbound model previously described in `infra/specs/ACCOUNT_PILOT_SPEC.md`.
+
+- Design: `docs/specs/2026-05-01-storage-rewrite-design.md`
+- Roadmap & sub-slice plans: `docs/plans/`
+
+The legacy `mailpilot` package continues to ship in this repo until SP1
+deletes it.
+
+---
+
 # MailPilot
 
 **Real-time email engine for AI agents.**

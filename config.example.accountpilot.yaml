@@ -1,0 +1,13 @@
+# Example AccountPilot config — copy to ~/.config/accountpilot/config.yaml
+# and edit. Apply with `accountpilot setup`.
+
+version: 1
+
+owners:
+  - name: Aren
+    surname: Eren
+    identifiers:
+      - { kind: email, value: aren@example.com }
+      - { kind: phone, value: "+905052490139" }
+
+plugins: {}   # SP1 adds the mail plugin; SP2 adds imessage
