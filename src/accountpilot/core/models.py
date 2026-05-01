@@ -7,7 +7,7 @@ from datetime import (
 )
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 Direction = Literal["inbound", "outbound"]
 IdentifierKind = Literal[
@@ -60,6 +60,13 @@ class EmailMessage(_StrictBase):
     raw_headers: dict[str, str]
     attachments: list[AttachmentBlob]
 
+    @field_validator("sent_at", "received_at", mode="after")
+    @classmethod
+    def _require_tz_aware(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware (use UTC)")
+        return v
+
 
 class IMessageMessage(_StrictBase):
     account_id: int
@@ -74,6 +81,13 @@ class IMessageMessage(_StrictBase):
     is_read: bool
     date_read: datetime | None
     attachments: list[AttachmentBlob]
+
+    @field_validator("sent_at", "date_read", mode="after")
+    @classmethod
+    def _require_tz_aware(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware (use UTC)")
+        return v
 
 
 class SaveResult(_StrictBase):
