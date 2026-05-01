@@ -96,3 +96,40 @@ def _split_display_name(name: str | None) -> tuple[str, str | None]:
     if len(parts) == 1:
         return parts[0], None
     return parts[0], parts[1]
+
+
+async def merge_people(
+    db: aiosqlite.Connection, *, keep_id: int, discard_id: int
+) -> None:
+    """Re-point all FKs from `discard_id` to `keep_id`, then delete discarded.
+
+    Single transaction. Self-merge raises ValueError.
+    """
+    if keep_id == discard_id:
+        raise ValueError("cannot merge a person with themselves")
+
+    await db.execute("BEGIN")
+    try:
+        await db.execute(
+            "UPDATE identifiers SET person_id=? WHERE person_id=?",
+            (keep_id, discard_id),
+        )
+        await db.execute(
+            "UPDATE accounts SET owner_id=? WHERE owner_id=?",
+            (keep_id, discard_id),
+        )
+        # message_people PK is (message_id, person_id, role); duplicates after
+        # repointing are silently skipped via INSERT OR IGNORE.
+        await db.execute(
+            "INSERT OR IGNORE INTO message_people (message_id, person_id, role) "
+            "SELECT message_id, ?, role FROM message_people WHERE person_id=?",
+            (keep_id, discard_id),
+        )
+        await db.execute(
+            "DELETE FROM message_people WHERE person_id=?", (discard_id,)
+        )
+        await db.execute("DELETE FROM people WHERE id=?", (discard_id,))
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
