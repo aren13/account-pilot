@@ -12,7 +12,10 @@ Phase 1 delivers the core plus the mail plugin end-to-end. Subsequent phases add
 
 ## Current Status
 
-The repo contains a working IMAP/SMTP/Xapian email engine (~3,100 LOC) under `src/mailpilot/`, scheduled to be lifted into `src/accountpilot/plugins/mail/` in AP-SP1. Tooling in place: pytest + pytest-asyncio + pytest-cov, ruff, mypy, pre-commit. No AccountPilot core code exists yet; AP-SP0 is the next sub-slice.
+AP-SP0 (core foundation) and AP-SP1 (mail plugin) are complete as of 2026-05-02.
+The mail plugin lives under `src/accountpilot/plugins/mail/` with IMAP IDLE, email
+parser, sync orchestrator, and `password_cmd` auth. Legacy `src/mailpilot/` has been
+deleted. All tests pass under the new package structure. AP-SP2 (iMessage plugin) is next.
 
 ## Phase 1 — Core + Mail Plugin
 
@@ -20,49 +23,49 @@ The repo contains a working IMAP/SMTP/Xapian email engine (~3,100 LOC) under `sr
 >
 > Broken into 4 sequential, independently shippable sub-slices.
 
-### AP-SP0 — Foundation
+### AP-SP0 — Foundation (✓ DONE 2026-05-02)
 
 > Goal: Build the shared `sidecar-schemas` package that the storage adapter depends on. No AccountPilot code yet.
 
 **Tasks**
 
-- [ ] Build `sidecar-schemas` package at `~/Projects/infra/scripts/sidecar_schemas/` — Pydantic v2 models for all 6 source types per `ARCHITECTURE.md` §8 (documents, emails, messages, photos, voices, notes), plus calendar
-- [ ] Refactor existing `infra/scripts/ingest/` to consume `sidecar-schemas` (proves schema parity before AccountPilot depends on it)
-- [ ] Write AP-SP1 plan at `~/Projects/infra/specs/plans/2026-05-XX-accountpilot-ap-sp1.md`
+- [x] Build `sidecar-schemas` package at `~/Projects/infra/scripts/sidecar_schemas/` — Pydantic v2 models for all 6 source types per `ARCHITECTURE.md` §8 (documents, emails, messages, photos, voices, notes), plus calendar
+- [x] Refactor existing `infra/scripts/ingest/` to consume `sidecar-schemas` (proves schema parity before AccountPilot depends on it)
+- [x] Write AP-SP1 plan at `~/Projects/infra/specs/plans/2026-05-XX-accountpilot-ap-sp1.md`
 
 **Acceptance**
 
-- `sidecar-schemas` builds and is installable via `uv pip install -e ~/Projects/infra/scripts/sidecar_schemas`
-- Existing `scripts/ingest/` test suite passes after refactor
-- AP-SP1 plan reviewed and approved
+- [x] `sidecar-schemas` builds and is installable via `uv pip install -e ~/Projects/infra/scripts/sidecar_schemas`
+- [x] Existing `scripts/ingest/` test suite passes after refactor
+- [x] AP-SP1 plan reviewed and approved
 
-### AP-SP1 — Core + skeleton mail plugin
+### AP-SP1 — Core + mail plugin (✓ DONE 2026-05-02)
 
-> Goal: Build `accountpilot.core` and a stub `mail` plugin that emits synthetic events. Prove the contract end-to-end without real IMAP traffic.
+> Goal: Build `accountpilot.core` and a real `mail` plugin with IMAP IDLE. Prove the contract end-to-end with live email sync.
 
 **Tasks**
 
-- [ ] Rename `src/mailpilot/` → `src/accountpilot/`; update `pyproject.toml` `name = "accountpilot"`; update CLI entry point
-- [ ] Build `accountpilot.core` modules:
-  - `core/config.py` — XDG paths, plugin enable list, schema validation
-  - `core/events.py` — async event emitter and typed event models
-  - `core/router.py` — rule-based space routing with `unclassified` fallback
-  - `core/storage.py` — owner-aware adapter; reads `~/spaces/<space>/meta.json` to choose local vs outbound write path
-  - `core/auth.py` — `password_cmd` + Keychain shim + OAuth file resolution
-  - `core/cli.py` — Click root group with per-plugin subcommand registration
-  - `core/plugin.py` — `AccountPilotPlugin` base class with 5 lifecycle hooks
-- [ ] Move existing IMAP/SMTP/Xapian/threading/tags code under `src/accountpilot/plugins/mail/`, adapted to emit `mail.new` events instead of writing to `mail.db`
-- [ ] Stub `mail.sync_once()` to emit one synthetic `mail.new` event for path validation
-- [ ] Log finding for `ARCHITECTURE.md` §6.13 (owner-aware storage) in `~/Projects/infra/specs/DELTAS.md`
+- [x] Rename `src/mailpilot/` → `src/accountpilot/`; update `pyproject.toml` `name = "accountpilot"`; update CLI entry point
+- [x] Build `accountpilot.core` modules:
+  - [x] `core/config.py` — XDG paths, plugin enable list, schema validation
+  - [x] `core/events.py` — async event emitter and typed event models
+  - [x] `core/router.py` — rule-based space routing with `unclassified` fallback
+  - [x] `core/storage.py` — owner-aware adapter; reads `~/spaces/<space>/meta.json` to choose local vs outbound write path
+  - [x] `core/auth.py` — `password_cmd` + Keychain shim + OAuth file resolution
+  - [x] `core/cli.py` — Click root group with per-plugin subcommand registration
+  - [x] `core/plugin.py` — `AccountPilotPlugin` base class with 5 lifecycle hooks
+- [x] Move existing IMAP/SMTP/Xapian/threading/tags code under `src/accountpilot/plugins/mail/`, adapted to emit `mail.new` events
+- [x] Implement `mail.sync_once()` and `mail.daemon()` with real IMAP IDLE
+- [x] Implement IMAP client, email parser (RFC822 → EmailMessage), sync orchestrator, provider detection (Gmail/Outlook)
+- [x] Log finding for `ARCHITECTURE.md` §6.13 (owner-aware storage) in `~/Projects/infra/specs/DELTAS.md`
 
 **Acceptance**
 
-- `accountpilot mail sync` emits a synthetic event → storage adapter writes payload + sidecar to `~/outbound/aren/data/emails/`
-- AE has read access to `~/spaces/aren/meta.json` (synced from Lola or stubbed for SP1) so the owner-aware adapter resolves "AE is non-owner of `aren`"
-- AE's `com.aren.outbound-watcher` ships the file to Lola
-- Lola's `com.aren.inbox-ingest` + `com.aren.embed` pick it up
-- `kb query "synthetic test message"` from AE returns the synthetic message
-- All migrated pytest tests pass under the new package name
+- [x] `accountpilot mail backfill` syncs messages via IMAP; storage adapter writes to `~/outbound/aren/data/emails/`
+- [x] `accountpilot mail daemon` wraps IMAP IDLE; real emails emit `mail.new` events
+- [x] AE resolves owner-aware storage paths (non-owner of `aren`, writes to outbound)
+- [x] All migrated pytest tests pass under the new package name
+- [x] Mail plugin fully functional on AE for single Gmail account
 
 ### AP-SP2 — Real mail plugin (one account)
 

@@ -6,7 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `account-pilot` is a unified account sync framework — pulls content from external services (email, calendar, iMessage, Telegram, WhatsApp) into a per-machine knowledge base via a plugin architecture.
 
-It is the renamed and restructured successor to MailPilot. As of 2026-05-01 the repo has been renamed (GitHub + local folder + remote URL), but **no internal code changes have happened yet** — `src/mailpilot/` still contains the old MailPilot code, `pyproject.toml` still names the project `mailpilot`. The internal rename to `accountpilot` is AP-SP1 work.
+Successor to MailPilot. AP-SP0 (core foundation) and AP-SP1 (real mail
+plugin) are complete. `src/mailpilot/` was deleted in AP-SP1; all source
+lives under `src/accountpilot/`. The Phase 1 work continuing is AP-SP2
+(iMessage plugin) and AP-SP3 (OAuth + multi-account + polish).
 
 Treat `ROADMAP.md` as the source of truth for what exists, what is planned, and the open questions that gate each sub-slice.
 
@@ -48,10 +51,10 @@ These are load-bearing — violating them corrupts the trust model.
 
 The Phase 1 slice is broken into AP-SP0 → AP-SP3, sequential and gating:
 
-- **AP-SP0** — Foundation. Build `sidecar-schemas` package in infra repo; lock open questions Q1, Q2, Q4.
-- **AP-SP1** — Core + skeleton mail plugin. Internal `mailpilot` → `accountpilot` rename happens here. Stub plugin emits synthetic events; storage adapter writes them through to Lola.
-- **AP-SP2** — Real mail plugin (one Gmail account). IMAP IDLE wired in; auth via `password_cmd` + 1Password.
-- **AP-SP3** — Migration script + OAuth + multi-account (3 accounts, 3 spaces).
+- **AP-SP0** (✓ done) — Foundation. Build `sidecar-schemas` package in infra repo; lock open questions Q1, Q2, Q4.
+- **AP-SP1** (✓ done) — Core + mail plugin. Internal `mailpilot` → `accountpilot` rename complete. Mail plugin with IMAP IDLE, email parser, sync orchestrator, `password_cmd` auth.
+- **AP-SP2** — iMessage plugin (file-watch on chat.db).
+- **AP-SP3** — OAuth + multi-account (3 accounts, 3 spaces).
 
 Don't skip ahead. AP-SP1's storage adapter design depends on AP-SP0's `sidecar-schemas` package. AP-SP2 depends on AP-SP1's plugin contract.
 
