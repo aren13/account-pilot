@@ -7,14 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from accountpilot.plugins.mail.imap.idle import IdleListener
-from mailpilot.config import (
-    AccountConfig,
-    AuthConfig,
-    FolderConfig,
-    ImapConfig,
-    SmtpConfig,
-    SyncConfig,
-)
+
+# AccountConfig and SyncConfig are SP1-legacy mailpilot config shapes; the
+# IdleListener was originally written against them. We use MagicMock-shaped
+# fixtures here so the test doesn't depend on mailpilot.config (which Task 16
+# will delete). SP3's refactor of IdleListener to take primitives will let us
+# drop these stubs entirely.
 
 # -------------------------------------------------------------------
 # Fixtures
@@ -22,43 +20,35 @@ from mailpilot.config import (
 
 
 @pytest.fixture
-def sync_config() -> SyncConfig:
-    """Return a SyncConfig with fast timeouts for testing."""
-    return SyncConfig(
-        idle_timeout=10,
-        reconnect_base_delay=1,
-        reconnect_max_delay=5,
-        full_sync_interval=60,
-    )
+def sync_config() -> MagicMock:
+    """Return a mock SyncConfig with fast timeouts for testing."""
+    cfg = MagicMock()
+    cfg.idle_timeout = 10
+    cfg.reconnect_base_delay = 1
+    cfg.reconnect_max_delay = 5
+    cfg.full_sync_interval = 60
+    return cfg
 
 
 @pytest.fixture
-def account_config() -> AccountConfig:
-    """Return a minimal AccountConfig."""
-    return AccountConfig(
-        name="testacct",
-        email="test@example.com",
-        provider="custom",
-        imap=ImapConfig(
-            host="imap.example.com",
-            port=993,
-            encryption="tls",
-            auth=AuthConfig(
-                method="password",
-                password_cmd="echo secret",
-            ),
-        ),
-        smtp=SmtpConfig(
-            host="smtp.example.com",
-            port=587,
-            encryption="starttls",
-            auth=AuthConfig(
-                method="password",
-                password_cmd="echo secret",
-            ),
-        ),
-        folders=FolderConfig(watch=["INBOX"]),
-    )
+def account_config() -> MagicMock:
+    """Return a mock AccountConfig."""
+    cfg = MagicMock()
+    cfg.name = "testacct"
+    cfg.email = "test@example.com"
+    cfg.provider = "custom"
+    cfg.imap.host = "imap.example.com"
+    cfg.imap.port = 993
+    cfg.imap.encryption = "tls"
+    cfg.imap.auth.method = "password"
+    cfg.imap.auth.password_cmd = "echo secret"
+    cfg.smtp.host = "smtp.example.com"
+    cfg.smtp.port = 587
+    cfg.smtp.encryption = "starttls"
+    cfg.smtp.auth.method = "password"
+    cfg.smtp.auth.password_cmd = "echo secret"
+    cfg.folders.watch = ["INBOX"]
+    return cfg
 
 
 @pytest.fixture
@@ -84,8 +74,8 @@ def mock_sync_engine() -> AsyncMock:
 def listener(
     mock_imap_client: AsyncMock,
     mock_sync_engine: AsyncMock,
-    account_config: AccountConfig,
-    sync_config: SyncConfig,
+    account_config: MagicMock,
+    sync_config: MagicMock,
 ) -> IdleListener:
     """Return an IdleListener wired to mocks."""
     return IdleListener(
@@ -125,8 +115,8 @@ class TestIdleListener:
         self,
         mock_imap_client: AsyncMock,
         mock_sync_engine: AsyncMock,
-        account_config: AccountConfig,
-        sync_config: SyncConfig,
+        account_config: MagicMock,
+        sync_config: MagicMock,
     ) -> None:
         """The on_new_mail callback is stored on the instance."""
         callback = MagicMock()
@@ -149,7 +139,7 @@ class TestIdleListener:
     def test_idle_stores_account(
         self,
         listener: IdleListener,
-        account_config: AccountConfig,
+        account_config: MagicMock,
     ) -> None:
         """The account config is stored correctly."""
         assert listener._account is account_config
