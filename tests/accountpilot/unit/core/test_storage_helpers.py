@@ -164,3 +164,35 @@ async def test_upsert_owner_auto_merges_cross_person_collision(
         row = await cur.fetchone()
     assert row is not None
     assert row["c"] == 1
+
+
+async def test_latest_imap_uid_returns_max_per_account_and_mailbox(
+    tmp_db: aiosqlite.Connection, tmp_runtime: Path
+) -> None:
+    storage = Storage(tmp_db, CASStore(tmp_runtime / "attachments"))
+    owner_id = await storage.upsert_owner(
+        name="A", surname=None,
+        identifiers=[Identifier(kind="email", value="a@b.com")],
+    )
+    account_id = await storage.upsert_account(
+        source="gmail", identifier="a@b.com", owner_id=owner_id,
+    )
+    assert await storage.latest_imap_uid(account_id, "INBOX") is None
+
+    def _email(uid: int, ext_id: str, mailbox: str = "INBOX") -> EmailMessage:
+        return EmailMessage(
+            account_id=account_id, external_id=ext_id,
+            sent_at=datetime(2026, 5, 1, tzinfo=UTC), received_at=None,
+            direction="inbound", from_address="z@z",
+            to_addresses=[], cc_addresses=[], bcc_addresses=[],
+            subject="", body_text="", body_html=None, in_reply_to=None,
+            references=[], imap_uid=uid, mailbox=mailbox,
+            gmail_thread_id=None, labels=[], raw_headers={}, attachments=[],
+        )
+
+    await storage.save_email(_email(10, "a"))
+    await storage.save_email(_email(11, "b"))
+    await storage.save_email(_email(99, "c", mailbox="[Gmail]/Sent Mail"))
+    assert await storage.latest_imap_uid(account_id, "INBOX") == 11
+    assert await storage.latest_imap_uid(account_id, "[Gmail]/Sent Mail") == 99
+    assert await storage.latest_imap_uid(account_id, "Trash") is None

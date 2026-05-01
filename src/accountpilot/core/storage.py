@@ -376,6 +376,22 @@ class Storage:
             return None
         return datetime.fromisoformat(str(row["s"]))
 
+    async def latest_imap_uid(
+        self, account_id: int, mailbox: str
+    ) -> int | None:
+        """Highest imap_uid already ingested for this account+mailbox combo."""
+        async with self.db.execute(
+            "SELECT MAX(ed.imap_uid) AS u "
+            "FROM email_details ed "
+            "JOIN messages m ON m.id = ed.message_id "
+            "WHERE m.account_id = ? AND ed.mailbox = ?",
+            (account_id, mailbox),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or row["u"] is None:
+            return None
+        return int(row["u"])
+
     @staticmethod
     def _email_address_roles(msg: EmailMessage) -> list[tuple[str, str]]:
         roles: list[tuple[str, str]] = [(msg.from_address, "from")]
