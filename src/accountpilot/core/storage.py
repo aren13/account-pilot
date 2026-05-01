@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from accountpilot.core.identity import find_or_create_person
 from accountpilot.core.models import (
     AttachmentBlob,
     EmailMessage,
+    Identifier,
     IMessageMessage,
     SaveResult,
 )
@@ -247,6 +248,111 @@ class Storage:
             await self.db.execute("ROLLBACK")
             raise
 
+    # ─── Owner / account upsert ──────────────────────────────────────────
+
+    async def upsert_owner(
+        self,
+        *,
+        name: str,
+        surname: str | None,
+        identifiers: list[Identifier],
+    ) -> int:
+        """Find or create an owner. Existence is determined by ANY of the identifiers.
+
+        If multiple identifiers already point to different existing people, returns
+        the first match (callers can run merge_people afterwards).
+        """
+        for ident in identifiers:
+            async with self.db.execute(
+                "SELECT person_id FROM identifiers WHERE kind=? AND value=?",
+                (ident.kind, _normalize_for_kind(ident.kind, ident.value)),
+            ) as cur:
+                row = await cur.fetchone()
+            if row is not None:
+                pid = int(row["person_id"])
+                await self.db.execute(
+                    "UPDATE people SET is_owner=1, name=?, surname=?, updated_at=? "
+                    "WHERE id=?",
+                    (name, surname, datetime.now(UTC).isoformat(), pid),
+                )
+                # Add any new identifiers.
+                for missing in identifiers:
+                    await find_or_create_person(
+                        self.db, kind=missing.kind, value=missing.value,
+                        default_name=f"{name} {surname or ''}".strip(),
+                    )
+                await self.db.commit()
+                return pid
+
+        # No matches — create a new owner row + all identifiers.
+        now = datetime.now(UTC).isoformat()
+        cur2 = await self.db.execute(
+            "INSERT INTO people (name, surname, is_owner, created_at, updated_at) "
+            "VALUES (?, ?, 1, ?, ?)",
+            (name, surname, now, now),
+        )
+        pid = cast("int", cur2.lastrowid)
+        assert pid is not None
+        for ident in identifiers:
+            await self.db.execute(
+                "INSERT INTO identifiers "
+                "(person_id, kind, value, is_primary, created_at) "
+                "VALUES (?, ?, ?, 0, ?)",
+                (pid, ident.kind, _normalize_for_kind(ident.kind, ident.value), now),
+            )
+        await self.db.commit()
+        return pid
+
+    async def upsert_account(
+        self,
+        *,
+        source: str,
+        identifier: str,
+        owner_id: int,
+        credentials_ref: str | None = None,
+        display_name: str | None = None,
+    ) -> int:
+        """Find or create an account row. Idempotent on (source, identifier)."""
+        async with self.db.execute(
+            "SELECT id FROM accounts WHERE source=? AND account_identifier=?",
+            (source, identifier),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is not None:
+            return int(row["id"])
+        now = datetime.now(UTC).isoformat()
+        cur2 = await self.db.execute(
+            "INSERT INTO accounts (owner_id, source, account_identifier, "
+            "display_name, credentials_ref, enabled, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+            (owner_id, source, identifier, display_name, credentials_ref, now, now),
+        )
+        await self.db.commit()
+        aid = cast("int", cur2.lastrowid)
+        assert aid is not None
+        return aid
+
+    # ─── Read helpers ────────────────────────────────────────────────────
+
+    async def latest_external_id(self, account_id: int) -> str | None:
+        async with self.db.execute(
+            "SELECT external_id FROM messages WHERE account_id=? "
+            "ORDER BY sent_at DESC, id DESC LIMIT 1",
+            (account_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        return None if row is None else str(row["external_id"])
+
+    async def latest_sent_at(self, account_id: int) -> datetime | None:
+        async with self.db.execute(
+            "SELECT MAX(sent_at) AS s FROM messages WHERE account_id=?",
+            (account_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None or row["s"] is None:
+            return None
+        return datetime.fromisoformat(str(row["s"]))
+
     @staticmethod
     def _email_address_roles(msg: EmailMessage) -> list[tuple[str, str]]:
         roles: list[tuple[str, str]] = [(msg.from_address, "from")]
@@ -257,3 +363,16 @@ class Storage:
         for a in msg.bcc_addresses:
             roles.append((a, "bcc"))
         return roles
+
+
+def _normalize_for_kind(kind: str, value: str) -> str:
+    from accountpilot.core.identity import (
+        normalize_email,
+        normalize_handle,
+        normalize_phone,
+    )
+    if kind == "email":
+        return normalize_email(value)
+    if kind == "phone":
+        return normalize_phone(value)
+    return normalize_handle(value)
