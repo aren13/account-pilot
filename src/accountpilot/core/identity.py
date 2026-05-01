@@ -110,6 +110,15 @@ async def merge_people(
 
     await db.execute("BEGIN")
     try:
+        # Drop discarded identifiers whose (kind, value) already exist on keep
+        # (UNIQUE collision avoidance — schema enforces UNIQUE on (kind, value)).
+        await db.execute(
+            "DELETE FROM identifiers WHERE person_id=? AND (kind, value) IN ("
+            "  SELECT kind, value FROM identifiers WHERE person_id=?"
+            ")",
+            (discard_id, keep_id),
+        )
+        # Repoint the rest.
         await db.execute(
             "UPDATE identifiers SET person_id=? WHERE person_id=?",
             (keep_id, discard_id),
