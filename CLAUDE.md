@@ -70,13 +70,16 @@ Before proposing alternatives to any of these, re-read the Decision Log in `ROAD
 - Calendar OAuth extends Gmail/Outlook OAuth scopes — one consent covers both
 - Read-only in Phase 1 — agent-driven sends (mail/iMessage/Telegram) come in infra Phase 4
 
-## Open Questions Gating Work
+## Resolved Phase 1 Questions (closed 2026-05-01)
 
-These must be answered before the corresponding sub-slice starts (full text in `ROADMAP.md`):
+All seven gating questions closed. Full text + rationale in `ROADMAP.md` §Resolved Questions. One-liner each:
 
-- **Q1, Q2, Q4** before AP-SP1 — package shim strategy, ARCHITECTURE.md amendment timing, sidecar-schemas package home
-- **Q3, Q5** before AP-SP2 — host scope (AE-only vs AE+Lola), `password_cmd` vs OAuth
-- **Q6, Q7** before AP-SP3 — multi-machine same-account strategy, migration dry-run
+- **Q1** — Hard cut `mailpilot` → `accountpilot` in AP-SP1, no compat shim
+- **Q2** — Implement owner-aware adapter in AP-SP1, log to `infra/specs/DELTAS.md`, amend `ARCHITECTURE.md` §6.13 post-acceptance
+- **Q3** + **Q6** — AE is sole sync host for all 3 mail accounts through AP-SP3 (Lola never runs mail plugin for `aren`)
+- **Q4** — `sidecar-schemas` is a subpackage at `infra/scripts/sidecar_schemas/`
+- **Q5** — AP-SP2 uses `password_cmd` + 1Password; OAuth lands in AP-SP3
+- **Q7** — `migrate-from-mailpilot` ships with `--dry-run`, `--limit N`, `--resume-from <checksum>`
 
 ## Working Conventions
 
