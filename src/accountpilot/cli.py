@@ -8,6 +8,7 @@ from accountpilot.core.cli.people_cmds import people_group
 from accountpilot.core.cli.search_cmd import search_cmd
 from accountpilot.core.cli.setup_cmd import setup_cmd
 from accountpilot.core.cli.status_cmd import status_cmd
+from accountpilot.plugins.mail.cli import mail_group
 
 
 @click.group()
@@ -22,3 +23,4 @@ cli.add_command(people_group)
 cli.add_command(search_cmd)
 cli.add_command(setup_cmd)
 cli.add_command(status_cmd)
+cli.add_command(mail_group)
