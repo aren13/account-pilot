@@ -2,6 +2,7 @@
 
 import click
 
+from accountpilot.core.cli.accounts_cmds import accounts_group
 from accountpilot.core.cli.db_cmds import db_group
 from accountpilot.core.cli.people_cmds import people_group
 from accountpilot.core.cli.search_cmd import search_cmd
@@ -14,6 +15,7 @@ def cli() -> None:
     """AccountPilot — unified account sync framework."""
 
 
+cli.add_command(accounts_group)
 cli.add_command(db_group)
 cli.add_command(people_group)
 cli.add_command(search_cmd)
