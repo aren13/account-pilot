@@ -44,7 +44,7 @@ async def test_normalizes_phone_before_lookup(tmp_db: aiosqlite.Connection) -> N
         tmp_db, kind="phone", value="+90 505 249 01 39", default_name=None
     )
     pid2 = await find_or_create_person(
-        tmp_db, kind="phone", value="905052490139", default_name=None
+        tmp_db, kind="phone", value="+905052490139", default_name=None
     )
     assert pid1 == pid2
 

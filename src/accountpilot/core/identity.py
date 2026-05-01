@@ -20,36 +20,11 @@ def normalize_email(raw: str) -> str:
 
 
 def normalize_phone(raw: str, *, default_region: str | None = None) -> str:
-    """Best-effort E.164 normalization. Returns stripped raw if unparseable.
-
-    If no default_region is provided, tries to infer country code from the
-    number's leading digits.
-    """
+    """Best-effort E.164 normalization. Returns stripped raw if unparseable."""
     s = raw.strip()
     try:
         parsed = phonenumbers.parse(s, default_region)
     except phonenumbers.NumberParseException:
-        # If no region was provided, try inferring from leading country code
-        if default_region is None and not s.startswith("+"):
-            for cc_len in [1, 2, 3]:
-                if cc_len > len(s):
-                    continue
-                potential_cc_str = s[:cc_len]
-                if not potential_cc_str.isdigit():
-                    continue
-                potential_cc = int(potential_cc_str)
-                regions_list = (
-                    phonenumbers.COUNTRY_CODE_TO_REGION_CODE.get(potential_cc)
-                )
-                if regions_list:
-                    try:
-                        parsed = phonenumbers.parse(s, regions_list[0])
-                        if phonenumbers.is_possible_number(parsed):
-                            return phonenumbers.format_number(
-                                parsed, phonenumbers.PhoneNumberFormat.E164
-                            )
-                    except phonenumbers.NumberParseException:
-                        continue
         return s
     if not phonenumbers.is_possible_number(parsed):
         return s
@@ -77,13 +52,12 @@ async def find_or_create_person(
     kind: str,
     value: str,
     default_name: str | None = None,
-    default_region: str | None = None,
 ) -> int:
     """Look up the identifier; return person_id, creating both rows if absent."""
     if kind == "email":
         normalized = normalize_email(value)
     elif kind == "phone":
-        normalized = normalize_phone(value, default_region=default_region)
+        normalized = normalize_phone(value)
     else:
         normalized = normalize_handle(value)
 
