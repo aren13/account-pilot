@@ -1,10 +1,8 @@
-"""AccountPilot CLI root.
-
-Subcommands are registered in this module. Plugin-contributed subcommands are
-registered after entry-point discovery in core.plugin.load_plugins().
-"""
+"""AccountPilot CLI root."""
 
 import click
+
+from accountpilot.core.cli.db_cmds import db_group
 
 
 @click.group()
@@ -13,5 +11,4 @@ def cli() -> None:
     """AccountPilot — unified account sync framework."""
 
 
-# Subcommand registrations are added in later tasks (db, people, accounts,
-# setup, status, search).
+cli.add_command(db_group)
