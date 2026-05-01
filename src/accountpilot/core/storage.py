@@ -11,6 +11,7 @@ from accountpilot.core.identity import find_or_create_person
 from accountpilot.core.models import (
     AttachmentBlob,
     EmailMessage,
+    IMessageMessage,
     SaveResult,
 )
 
@@ -141,6 +142,102 @@ class Storage:
                         blob.mime_type,
                         len(blob.content),
                         cas_rel,
+                    ),
+                )
+
+            await self.db.execute("COMMIT")
+            return SaveResult(action="inserted", message_id=message_id)
+        except Exception:
+            await self.db.execute("ROLLBACK")
+            raise
+
+    async def save_imessage(self, msg: IMessageMessage) -> SaveResult:
+        # CAS writes (idempotent, outside DB transaction).
+        cas_entries: list[tuple[AttachmentBlob, str, str]] = []
+        for blob in msg.attachments:
+            content_hash, cas_rel = self.cas.write(blob.content)
+            cas_entries.append((blob, content_hash, cas_rel))
+
+        # Resolve sender + participant person_ids BEFORE the transaction so
+        # find_or_create_person's internal commits don't interleave.
+        sender_pid = await find_or_create_person(
+            self.db, kind="imessage_handle",
+            value=msg.sender_handle, default_name=None,
+        )
+        participant_pids: list[int] = []
+        for handle in msg.participants:
+            pid = await find_or_create_person(
+                self.db, kind="imessage_handle",
+                value=handle, default_name=None,
+            )
+            participant_pids.append(pid)
+
+        await self.db.execute("BEGIN")
+        try:
+            # Dedup.
+            async with self.db.execute(
+                "SELECT id FROM messages WHERE account_id=? AND external_id=?",
+                (msg.account_id, msg.external_id),
+            ) as cur:
+                existing = await cur.fetchone()
+            if existing is not None:
+                await self.db.execute("ROLLBACK")
+                return SaveResult(action="skipped", message_id=int(existing["id"]))
+
+            # Look up source from accounts (don't hardcode).
+            async with self.db.execute(
+                "SELECT source FROM accounts WHERE id=?", (msg.account_id,)
+            ) as cur:
+                row = await cur.fetchone()
+            if row is None:
+                await self.db.execute("ROLLBACK")
+                raise ValueError(f"unknown account_id: {msg.account_id}")
+            source = str(row["source"])
+
+            now = datetime.now(UTC).isoformat()
+            cur2 = await self.db.execute(
+                "INSERT INTO messages (account_id, source, external_id, thread_id, "
+                "sent_at, body_text, direction, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    msg.account_id, source, msg.external_id,
+                    msg.chat_guid, msg.sent_at.isoformat(),
+                    msg.body_text, msg.direction, now,
+                ),
+            )
+            message_id = cur2.lastrowid
+            assert message_id is not None
+
+            await self.db.execute(
+                "INSERT INTO imessage_details (message_id, chat_guid, service, "
+                "is_from_me, is_read, date_read) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    message_id, msg.chat_guid, msg.service,
+                    1 if msg.direction == "outbound" else 0,
+                    1 if msg.is_read else 0,
+                    msg.date_read.isoformat() if msg.date_read else None,
+                ),
+            )
+
+            await self.db.execute(
+                "INSERT OR IGNORE INTO message_people (message_id, person_id, role) "
+                "VALUES (?, ?, 'from')",
+                (message_id, sender_pid),
+            )
+            for pid in participant_pids:
+                await self.db.execute(
+                    "INSERT OR IGNORE INTO message_people "
+                    "(message_id, person_id, role) VALUES (?, ?, 'participant')",
+                    (message_id, pid),
+                )
+
+            for blob, content_hash, cas_rel in cas_entries:
+                await self.db.execute(
+                    "INSERT INTO attachments (message_id, filename, content_hash, "
+                    "mime_type, size_bytes, cas_path) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        message_id, blob.filename, content_hash, blob.mime_type,
+                        len(blob.content), cas_rel,
                     ),
                 )
 
