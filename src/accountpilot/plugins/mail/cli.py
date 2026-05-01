@@ -54,7 +54,10 @@ async def _opened_plugin(
             f"no enabled `plugins.mail` section in {config_path}"
         )
     mail_cfg_dict: dict[str, Any] = {
-        "accounts": [a.model_dump() for a in mail_cfg_raw.accounts],
+        "accounts": [
+            a.model_dump(exclude_none=True, exclude={"chat_db_path"})
+            for a in mail_cfg_raw.accounts
+        ],
         **mail_cfg_raw.extra,
     }
     cas = CASStore(db_path.parent / "attachments")

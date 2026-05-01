@@ -244,11 +244,20 @@ class ImapClient:
             raise ImapError(f"UID SEARCH failed: {response.lines}")
 
         uids: list[int] = []
-        for line in response.lines:
-            if isinstance(line, str):
-                for token in line.split():
-                    if token.isdigit():
-                        uids.append(int(token))
+        for raw_line in response.lines:
+            # aioimaplib returns response.lines as bytes; legacy mailpilot's
+            # `isinstance(line, str)` filter dropped them all, returning an
+            # empty UID list. Decode bytes → str before tokenizing.
+            line = (
+                raw_line.decode("ascii", errors="ignore")
+                if isinstance(raw_line, bytes)
+                else raw_line
+            )
+            if not isinstance(line, str):
+                continue
+            for token in line.split():
+                if token.isdigit():
+                    uids.append(int(token))
         return sorted(uids)
 
     async def fetch_message(self, folder: str, uid: int) -> bytes:
@@ -467,16 +476,35 @@ class ImapClient:
     async def _fetch_part(
         self, folder: str, uid: int, part: str
     ) -> bytes:
-        """Fetch a single message *part* by UID."""
+        """Fetch a single message *part* by UID.
+
+        aioimaplib FETCH returns ``response.lines`` shaped like::
+
+            [0] b'<seq> FETCH (UID <n> RFC822 {<size>}'   protocol envelope
+            [1] bytearray(<size> bytes)                   the actual payload
+            [2] b')'
+            [3] b'Success'
+
+        So we find the envelope line carrying the literal marker
+        ``{<size>}`` and return the next entry as ``bytes``. The legacy
+        "return the first bytes line" parsing returned the envelope as
+        the message body — visible in the DB as ``"<seq> FETCH (UID
+        ... RFC822 {<size>}"`` strings instead of email content.
+        """
         conn = await self._get_conn(folder)
         response = await conn.uid("fetch", str(uid), f"({part})")
         if response.result != "OK":
             raise ImapError(
                 f"FETCH {part} failed for UID {uid}: {response.lines}"
             )
-        for line in response.lines:
-            if isinstance(line, bytes):
-                return line
+        for i, line in enumerate(response.lines):
+            if not isinstance(line, (bytes, bytearray)):
+                continue
+            head = bytes(line[:256])
+            if re.search(rb"\{\d+\}", head) and i + 1 < len(response.lines):
+                payload = response.lines[i + 1]
+                if isinstance(payload, (bytes, bytearray)):
+                    return bytes(payload)
         raise ImapError(
             f"No data in FETCH {part} response for UID {uid}"
         )
