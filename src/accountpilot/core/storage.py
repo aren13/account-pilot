@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 from accountpilot.core.identity import (
     find_or_create_person,
+    merge_people,
     normalize_email,
     normalize_handle,
     normalize_phone,
@@ -264,9 +265,12 @@ class Storage:
     ) -> int:
         """Find or create an owner. Existence is determined by ANY of the identifiers.
 
-        If multiple identifiers already point to different existing people, returns
-        the first match (callers can run merge_people afterwards).
+        If multiple identifiers already point to different existing people,
+        consolidates them via merge_people.
         """
+        # Resolve every supplied identifier. matched_ids is the set of person
+        # ids that already own one of these identifiers (zero, one, or many).
+        matched_ids: list[int] = []
         for ident in identifiers:
             async with self.db.execute(
                 "SELECT person_id FROM identifiers WHERE kind=? AND value=?",
@@ -275,26 +279,33 @@ class Storage:
                 row = await cur.fetchone()
             if row is not None:
                 pid = int(row["person_id"])
+                if pid not in matched_ids:
+                    matched_ids.append(pid)
+
+        if matched_ids:
+            keep_id = matched_ids[0]
+            # If multiple existing people match, merge them all into the first.
+            for stray_id in matched_ids[1:]:
+                await merge_people(self.db, keep_id=keep_id, discard_id=stray_id)
+
+            # Promote keep_id to owner; refresh name/surname.
+            await self.db.execute(
+                "UPDATE people SET is_owner=1, name=?, surname=?, updated_at=? "
+                "WHERE id=?",
+                (name, surname, datetime.now(UTC).isoformat(), keep_id),
+            )
+            # Attach any not-yet-present identifiers to keep_id.
+            for ident in identifiers:
                 await self.db.execute(
-                    "UPDATE people SET is_owner=1, name=?, surname=?, updated_at=? "
-                    "WHERE id=?",
-                    (name, surname, datetime.now(UTC).isoformat(), pid),
+                    "INSERT OR IGNORE INTO identifiers "
+                    "(person_id, kind, value, is_primary, created_at) "
+                    "VALUES (?, ?, ?, 0, ?)",
+                    (keep_id, ident.kind,
+                     _normalize_for_kind(ident.kind, ident.value),
+                     datetime.now(UTC).isoformat()),
                 )
-                # Attach any not-yet-present identifiers to the matched person.
-                # INSERT OR IGNORE silently skips identifiers that already exist
-                # (UNIQUE on kind, value); for cross-person collisions the
-                # caller is expected to run merge_people separately.
-                for ident in identifiers:
-                    await self.db.execute(
-                        "INSERT OR IGNORE INTO identifiers "
-                        "(person_id, kind, value, is_primary, created_at) "
-                        "VALUES (?, ?, ?, 0, ?)",
-                        (pid, ident.kind,
-                         _normalize_for_kind(ident.kind, ident.value),
-                         datetime.now(UTC).isoformat()),
-                    )
-                await self.db.commit()
-                return pid
+            await self.db.commit()
+            return keep_id
 
         # No matches — create a new owner row + all identifiers.
         now = datetime.now(UTC).isoformat()

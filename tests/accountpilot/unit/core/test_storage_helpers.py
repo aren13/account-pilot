@@ -121,3 +121,46 @@ async def test_upsert_owner_attaches_new_identifiers_to_matched_person(
         row = await cur.fetchone()
     assert row is not None
     assert row["c"] == 1
+
+
+async def test_upsert_owner_auto_merges_cross_person_collision(
+    tmp_db: aiosqlite.Connection, tmp_runtime: Path
+) -> None:
+    """When two declared identifiers point at two different existing people,
+    upsert_owner consolidates them into one via merge_people."""
+    storage = Storage(tmp_db, CASStore(tmp_runtime / "attachments"))
+
+    # Pre-seed two distinct people via find_or_create — these would normally
+    # be two contacts created by save_email's address resolution.
+    from accountpilot.core.identity import find_or_create_person
+    person_a = await find_or_create_person(
+        tmp_db, kind="email", value="aren@x.com", default_name="Aren"
+    )
+    person_b = await find_or_create_person(
+        tmp_db, kind="phone", value="+15551234567", default_name="Aren"
+    )
+    assert person_a != person_b  # confirm the pre-seed split
+
+    # Now declare them as the same owner. upsert_owner must merge.
+    pid = await storage.upsert_owner(
+        name="Aren", surname="E",
+        identifiers=[
+            Identifier(kind="email", value="aren@x.com"),
+            Identifier(kind="phone", value="+15551234567"),
+        ],
+    )
+
+    # Both identifiers now point at the same person.
+    async with tmp_db.execute(
+        "SELECT person_id FROM identifiers "
+        "WHERE value IN ('aren@x.com', '+15551234567')"
+    ) as cur:
+        rows = [r["person_id"] for r in await cur.fetchall()]
+    assert set(rows) == {pid}
+    # And the duplicate person row is gone.
+    async with tmp_db.execute(
+        "SELECT COUNT(*) AS c FROM people"
+    ) as cur:
+        row = await cur.fetchone()
+    assert row is not None
+    assert row["c"] == 1
