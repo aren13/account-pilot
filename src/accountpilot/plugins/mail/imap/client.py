@@ -5,11 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aioimaplib import IMAP4, IMAP4_SSL
 
-from accountpilot.config import resolve_password
 from accountpilot.plugins.mail.imap import (
     AuthenticationError,
     ConnectionError,  # noqa: A004
@@ -20,8 +19,15 @@ from accountpilot.plugins.mail.providers import get_provider
 if TYPE_CHECKING:
     from aioimaplib import IMAP4ClientProtocol
 
-    from accountpilot.config import AccountConfig, SyncConfig
     from accountpilot.plugins.mail.providers import Provider
+
+    # AccountConfig and SyncConfig are mailpilot legacy shapes the IMAP client
+    # was originally written against. SP1 keeps the client's legacy
+    # AccountConfig-shaped surface and constructs adapters in the mail plugin
+    # (Task 12); SP3 may refactor the client to take primitives directly.
+    # Until then we type these as `Any` so the file is self-contained.
+    AccountConfig = Any
+    SyncConfig = Any
 
 # Data dir is needed for OAuth token cache; set by AccountPilot on init.
 _data_dir: str = ""
@@ -99,7 +105,7 @@ class ImapClient:
 
         try:
             if imap_cfg.auth.method == "oauth2":
-                from accountpilot.oauth import get_access_token
+                from accountpilot.plugins.mail.oauth import get_access_token
 
                 token = get_access_token(
                     imap_cfg.auth,
@@ -111,7 +117,12 @@ class ImapClient:
                     self._account.email, token
                 )
             else:
-                password = resolve_password(imap_cfg.auth)
+                from accountpilot.core.auth import Secrets
+
+                # imap_cfg.auth.password is a credentials_ref URI (e.g.,
+                # `password_cmd:op read ...` or a literal). Secrets.resolve
+                # handles the password_cmd: scheme; literals pass through.
+                password = Secrets.resolve(imap_cfg.auth.password)
                 response = await conn.login(
                     self._account.email, password
                 )
