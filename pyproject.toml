@@ -41,6 +41,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
+    "types-PyYAML",
     "pre-commit",
 ]
 
