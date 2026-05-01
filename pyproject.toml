@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mailpilot"
+name = "accountpilot"
 version = "0.1.0"
-description = "Real-time email engine for AI agents — one tool to replace mbsync + notmuch + himalaya"
+description = "Unified per-machine account sync framework — email, calendar, iMessage, Telegram, WhatsApp"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 authors = [{ name = "ae" }]
@@ -46,20 +46,18 @@ dev = [
 ]
 
 [project.scripts]
-mailpilot = "mailpilot.cli:cli"
-accountpilot = "accountpilot.cli:cli"  # NEW
+accountpilot = "accountpilot.cli:cli"
 
 [project.entry-points."accountpilot.plugins"]
-# Plugins register here. SP0 ships none. The synthetic test plugin registers
-# itself programmatically in tests, not via entry points.
+mail = "accountpilot.plugins.mail.plugin:MailPlugin"
 
 [project.urls]
-Homepage = "https://github.com/ae/mail-pilot"
-Repository = "https://github.com/ae/mail-pilot"
-Issues = "https://github.com/ae/mail-pilot/issues"
+Homepage = "https://github.com/aren13/account-pilot"
+Repository = "https://github.com/aren13/account-pilot"
+Issues = "https://github.com/aren13/account-pilot/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mailpilot", "src/accountpilot"]   # MODIFIED
+packages = ["src/accountpilot"]
 
 [tool.ruff]
 target-version = "py311"
