@@ -34,6 +34,7 @@ CREATE TABLE accounts (
     updated_at          TIMESTAMP NOT NULL,
     UNIQUE (source, account_identifier)
 );
+CREATE INDEX idx_accounts_owner ON accounts(owner_id);
 
 -- Message layer -----------------------------------------------------------
 

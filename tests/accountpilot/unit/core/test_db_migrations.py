@@ -164,3 +164,18 @@ async def test_001_init_fts_trigger_indexes_body_and_subject(
         ) as cur:
             row = await cur.fetchone()
             assert row is not None and row[0] == 1
+        # Update subject and verify email_details update trigger keeps FTS in sync.
+        await db.execute(
+            "UPDATE email_details SET subject = 'farewell cruel earth'"
+            " WHERE message_id = 1"
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'farewell'"
+        ) as cur:
+            assert (await cur.fetchone())[0] == 1
+        # The old subject term ('world') should no longer match.
+        async with db.execute(
+            "SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'world'"
+        ) as cur:
+            assert (await cur.fetchone()) is None
