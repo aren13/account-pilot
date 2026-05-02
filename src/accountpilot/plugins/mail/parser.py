@@ -5,6 +5,7 @@ from __future__ import annotations
 import email
 from datetime import UTC, datetime
 from email import policy
+from email.header import decode_header, make_header
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -12,6 +13,24 @@ from accountpilot.core.models import AttachmentBlob, EmailMessage
 
 if TYPE_CHECKING:
     from email.message import Message as StdlibMessage
+
+
+def _decode_2047(raw: object) -> str:
+    """Decode RFC 2047 encoded-word headers (=?charset?B?…?=) to plain text.
+
+    Returns the input unchanged if it's None, empty, or fails to decode.
+    Concatenates multi-segment encodings (line continuations) without
+    inserting spaces between adjacent encoded words.
+    """
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return s
+    try:
+        return str(make_header(decode_header(s)))
+    except Exception:  # noqa: BLE001 — defensive: bad headers stay raw
+        return s
 
 
 def parse_rfc822_to_email_message(
@@ -48,11 +67,11 @@ def parse_rfc822_to_email_message(
         sent_at=sent_at,
         received_at=received_at,
         direction=direction,
-        from_address=str(parsed.get("From", "")).strip(),
+        from_address=_decode_2047(parsed.get("From", "")),
         to_addresses=_split_address_list(parsed.get_all("To")),
         cc_addresses=_split_address_list(parsed.get_all("Cc")),
         bcc_addresses=_split_address_list(parsed.get_all("Bcc")),
-        subject=str(parsed.get("Subject", "")).strip(),
+        subject=_decode_2047(parsed.get("Subject", "")),
         body_text=body_text,
         body_html=body_html,
         in_reply_to=_strip_or_none(parsed.get("In-Reply-To")),
@@ -87,14 +106,15 @@ def _strip_or_none(v: object) -> str | None:
 
 
 def _split_address_list(headers: list[Any] | None) -> list[str]:
+    """Split comma-separated address headers, decoding RFC 2047 display names."""
     if not headers:
         return []
     out: list[str] = []
     for h in headers:
         for addr in str(h).split(","):
-            a = addr.strip()
-            if a:
-                out.append(a)
+            decoded = _decode_2047(addr)
+            if decoded:
+                out.append(decoded)
     return out
 
 

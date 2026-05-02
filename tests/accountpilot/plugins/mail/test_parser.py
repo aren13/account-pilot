@@ -89,3 +89,67 @@ def test_parse_propagates_raw_headers() -> None:
     )
     assert msg.raw_headers["Subject"] == "Hello"
     assert "abc-123" in msg.raw_headers["Message-ID"]
+
+
+def test_parse_decodes_rfc2047_subject() -> None:
+    """Encoded-word subjects (`=?utf-8?B?…?=`) must decode to plain text.
+
+    The legacy parser stored these verbatim, so 1100/2238 real Gmail
+    messages had unreadable subjects after the AP-SP1 backfill.
+    """
+    raw = (
+        b"Message-ID: <enc-1@x>\n"
+        b"Date: Fri, 01 May 2026 12:00:00 +0000\n"
+        b"From: a@b\n"
+        b"To: c@d\n"
+        b"Subject: =?UTF-8?B?TWVyaGFiYSBkw7xueWE=?=\n"
+        b"\n"
+        b"body\n"
+    )
+    msg = parse_rfc822_to_email_message(
+        raw_bytes=raw, account_id=1, mailbox="INBOX",
+        imap_uid=1, direction="inbound",
+        gmail_thread_id=None, labels=[],
+    )
+    assert msg.subject == "Merhaba dünya"
+
+
+def test_parse_decodes_rfc2047_continuation_subject() -> None:
+    """RFC 2047 allows splitting one logical subject across multiple
+    encoded-words on continuation lines. They must concatenate without
+    inserting whitespace."""
+    raw = (
+        b"Message-ID: <enc-2@x>\n"
+        b"Date: Fri, 01 May 2026 12:00:00 +0000\n"
+        b"From: a@b\n"
+        b"To: c@d\n"
+        b"Subject: =?utf-8?B?S29zbW9zIFl1bmFuaXN0YW4gVml6ZSBIaXptZXRsZXJpIFJh?=\n"
+        b" =?utf-8?B?bmRldnUgZGV0YXnEsW7EsXo=?=\n"
+        b"\n"
+        b"body\n"
+    )
+    msg = parse_rfc822_to_email_message(
+        raw_bytes=raw, account_id=1, mailbox="INBOX",
+        imap_uid=1, direction="inbound",
+        gmail_thread_id=None, labels=[],
+    )
+    assert msg.subject == "Kosmos Yunanistan Vize Hizmetleri Randevu detayınız"
+
+
+def test_parse_decodes_rfc2047_from_display_name() -> None:
+    """Display name in From: may also be encoded."""
+    raw = (
+        b"Message-ID: <enc-3@x>\n"
+        b"Date: Fri, 01 May 2026 12:00:00 +0000\n"
+        b"From: =?iso-8859-9?Q?Ak=FDll=FD_=D6neri_Sistemi?= <ai@x.com>\n"
+        b"To: c@d\n"
+        b"Subject: hi\n"
+        b"\n"
+        b"body\n"
+    )
+    msg = parse_rfc822_to_email_message(
+        raw_bytes=raw, account_id=1, mailbox="INBOX",
+        imap_uid=1, direction="inbound",
+        gmail_thread_id=None, labels=[],
+    )
+    assert "Akıllı Öneri Sistemi" in msg.from_address
