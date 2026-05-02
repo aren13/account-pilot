@@ -392,6 +392,50 @@ class Storage:
             return None
         return int(row["u"])
 
+    async def update_sync_status(
+        self,
+        account_id: int,
+        *,
+        success: bool,
+        error: str | None = None,
+        messages_added: int = 0,
+    ) -> None:
+        """Upsert the per-account sync_status row.
+
+        On success: bump last_sync_at + last_success_at, increment
+        messages_ingested, clear any previous error. On failure: bump
+        last_sync_at, leave last_success_at, set last_error/last_error_at.
+        """
+        now = datetime.now(UTC).isoformat()
+        if success:
+            await self.db.execute(
+                "INSERT INTO sync_status "
+                "(account_id, last_sync_at, last_success_at, "
+                " last_error, last_error_at, messages_ingested) "
+                "VALUES (?, ?, ?, NULL, NULL, ?) "
+                "ON CONFLICT(account_id) DO UPDATE SET "
+                "  last_sync_at = excluded.last_sync_at, "
+                "  last_success_at = excluded.last_success_at, "
+                "  last_error = NULL, "
+                "  last_error_at = NULL, "
+                "  messages_ingested = "
+                "    sync_status.messages_ingested + excluded.messages_ingested",
+                (account_id, now, now, messages_added),
+            )
+        else:
+            await self.db.execute(
+                "INSERT INTO sync_status "
+                "(account_id, last_sync_at, last_success_at, "
+                " last_error, last_error_at, messages_ingested) "
+                "VALUES (?, ?, NULL, ?, ?, 0) "
+                "ON CONFLICT(account_id) DO UPDATE SET "
+                "  last_sync_at = excluded.last_sync_at, "
+                "  last_error = excluded.last_error, "
+                "  last_error_at = excluded.last_error_at",
+                (account_id, now, error or "", now),
+            )
+        await self.db.commit()
+
     @staticmethod
     def _email_address_roles(msg: EmailMessage) -> list[tuple[str, str]]:
         roles: list[tuple[str, str]] = [(msg.from_address, "from")]

@@ -129,6 +129,16 @@ class MailPlugin(AccountPilotPlugin):
                 result.inserted,
                 result.skipped,
             )
+            await self.storage.update_sync_status(
+                account_id, success=True, messages_added=result.inserted
+            )
+        except Exception as e:
+            await self.storage.update_sync_status(
+                account_id,
+                success=False,
+                error=f"{type(e).__name__}: {e}",
+            )
+            raise
         finally:
             await imap.disconnect("INBOX")
 
